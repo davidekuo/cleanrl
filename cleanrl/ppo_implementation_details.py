@@ -1,7 +1,10 @@
 import argparse
 import os
 from pathlib import Path
+import time
 from distutils.util import strtobool
+
+from torch.utils.tensorboard import SummaryWriter
 
 
 def str_to_bool(value):
@@ -52,3 +55,13 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     print(args)
+    run_name = f"{args.gym_id}__{args.exp_name}__{int(time.time())}"
+    writer = SummaryWriter(f"runs/{run_name}")
+    writer.add_text(
+        "hyperparameters",
+        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
+    )
+
+    # Test tensorboard set up with dummy data
+    for i in range(100):
+        writer.add_scalar("test_loss", i*2, global_step=i)
