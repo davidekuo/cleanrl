@@ -1,9 +1,12 @@
 import argparse
+from distutils.util import strtobool
 import os
 from pathlib import Path
 import time
-from distutils.util import strtobool
 
+import random
+import numpy as np
+import torch
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -49,19 +52,43 @@ def parse_args():
     parser.add_argument('--cuda', type=str_to_bool, default=True, nargs='?', const=True,
     # parser.add_argument('--cuda', type=lambda x:bool(strtobool(x)), default=True, nargs='?', const=True,
                         help='if toggled or set to True, use CUDA (defaults to True)')
+    parser.add_argument('--track', type=str_to_bool, default=False, nargs='?', const=True,
+                        help='if toggled or set to True, this experiment will be tracked with Weights and Biases (defaults to False)')
+    parser.add_argument('--wandb-project-name', type=str, default='cleanrl',
+                        help='Weights and Biases project name')
+    parser.add_argument('--wandb-entity', type=str, default=None,
+                        help='Weights and Biases entity (team), defaults to logged-in username')
     args = parser.parse_args()
     return args
 
 if __name__ == "__main__":
     args = parse_args()
     print(args)
+    
     run_name = f"{args.gym_id}__{args.exp_name}__{int(time.time())}"
+    
+    if args.track:
+        import wandb
+        wandb.init(
+            project=args.wandb_project_name,
+            entity=args.wandb_entity,
+            sync_tensorboard=True,
+            config=vars(args),
+            name=run_name,
+            monitor_gym=True,
+            save_code=True,
+        )
+    
     writer = SummaryWriter(f"runs/{run_name}")
     writer.add_text(
         "hyperparameters",
         "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
     )
 
-    # Test tensorboard set up with dummy data
-    for i in range(100):
-        writer.add_scalar("test_loss", i*2, global_step=i)
+    # TRY NOT TO MODIFY: seeding
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.backends.cudnn.deterministic = args.torch_deterministic
+
+    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")  #TODO: add "mps" option
