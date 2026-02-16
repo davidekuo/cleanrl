@@ -95,14 +95,13 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")  #TODO: add "mps" option
 
     env = gym.make("CartPole-v1")   # initialize environment
+    env = gym.wrappers.RecordEpisodeStatistics(env)  # records episode statistics (e.g. episodic return) in 'info'
+    env = gym.wrappers.RecordVideo(env, "videos", step_trigger=lambda t: t % 100 == 0)  # record video of agent playing game (record frame every 100 timesteps)
     observation = env.reset()       # reset environment to get 1st observation
-    episodic_return = 0
     for _ in range(200):
         action = env.action_space.sample()                  # sample an action
         observation, reward, done, info = env.step(action)  # step environment to get next observation, current reward, done variable indicating if episode has finished, info variable for extra stuff
-        episodic_return += reward
         if done:                        # if current episode is finished
             observation = env.reset()   # reset environment to get 1st observation for next episode
-            print(f"episodic return: {episodic_return}")
-            episodic_return = 0
+            print(f"episodic return: {info['episode']['r']}")
     env.close()
