@@ -94,14 +94,23 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")  #TODO: add "mps" option
 
-    env = gym.make("CartPole-v1")   # initialize environment
-    env = gym.wrappers.RecordEpisodeStatistics(env)  # records episode statistics (e.g. episodic return) in 'info'
-    env = gym.wrappers.RecordVideo(env, "videos", step_trigger=lambda t: t % 100 == 0)  # record video of agent playing game (record frame every 100 timesteps)
-    observation = env.reset()       # reset environment to get 1st observation
+    # environment creating function
+    def make_env(gym_id):
+        def thunk():
+            env = gym.make(gym_id)  # initialize environment
+            env = gym.wrappers.RecordEpisodeStatistics(env) # records episode statistics (e.g. episodic return) in 'info'
+            env = gym.wrappers.RecordVideo(env, "videos", step_trigger=lambda t: t % 100 == 0) # record video of agent playing game (record video every 100 timesteps)
+            return env
+        return thunk
+    
+    # use SyncVectorEnv API to create vector environment from list of env-creating functions
+    envs = gym.vector.SyncVectorEnv([make_env(args.gym_id)]) 
+
+    observation = envs.reset()
     for _ in range(200):
-        action = env.action_space.sample()                  # sample an action
-        observation, reward, done, info = env.step(action)  # step environment to get next observation, current reward, done variable indicating if episode has finished, info variable for extra stuff
-        if done:                        # if current episode is finished
-            observation = env.reset()   # reset environment to get 1st observation for next episode
-            print(f"episodic return: {info['episode']['r']}")
-    env.close()
+        action = envs.action_space.sample()                     # sample an action
+        observation, reward, done, info = envs.step(action)     # records episode statistics (e.g. episodic return) in 'info'
+        for item in info:
+            if "episode" in item.keys():
+                print(f"episodic return {item['episode']['r']}")
+                # NOTE: there is no 'observation = env.reset()' anymore - vector environments will automatically reset
