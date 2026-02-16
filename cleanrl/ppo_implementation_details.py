@@ -2,9 +2,10 @@ import argparse
 from distutils.util import strtobool
 import os
 from pathlib import Path
+import random
 import time
 
-import random
+import gym
 import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -64,7 +65,7 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     print(args)
-    
+
     run_name = f"{args.gym_id}__{args.exp_name}__{int(time.time())}"
     
     if args.track:
@@ -92,3 +93,16 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")  #TODO: add "mps" option
+
+    env = gym.make("CartPole-v1")   # initialize environment
+    observation = env.reset()       # reset environment to get 1st observation
+    episodic_return = 0
+    for _ in range(200):
+        action = env.action_space.sample()                  # sample an action
+        observation, reward, done, info = env.step(action)  # step environment to get next observation, current reward, done variable indicating if episode has finished, info variable for extra stuff
+        episodic_return += reward
+        if done:                        # if current episode is finished
+            observation = env.reset()   # reset environment to get 1st observation for next episode
+            print(f"episodic return: {episodic_return}")
+            episodic_return = 0
+    env.close()
