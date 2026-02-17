@@ -6,6 +6,7 @@ import random
 import time
 
 import gym
+import gym.spaces
 import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -22,6 +23,20 @@ def str_to_bool(value):
         raise argparse.ArgumentTypeError(f"Boolean value expected, got '{value}'.")
 
 
+def make_env(gym_id, seed, idx, capture_video, run_name):
+    def thunk():
+        env = gym.make(gym_id)  # initialize environment
+        env = gym.wrappers.RecordEpisodeStatistics(env) # records episode statistics (e.g. episodic return) in 'info'
+        if capture_video:
+            if idx == 0:
+                env = gym.wrappers.RecordVideo(env, "videos/{run_name}", step_trigger=lambda t: t % 1000 == 0) # record video of agent playing game (record video every 1000 timesteps)
+        env.reset(seed=seed)
+        env.action_space.seed(seed)
+        env.observation_space.seed(seed)
+        return env
+    return thunk
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--exp_name', type=str, default=Path(__file__).stem,
@@ -30,15 +45,15 @@ def parse_args():
                         # os.path.basename() returns 'tail of path string
                         # removesuffix() removes the '.py' suffix
                         help='experiment name')
-    parser.add_argument('--gym-id', type=str, default="CartPole-v1",
+    parser.add_argument('--gym_id', type=str, default="CartPole-v1",
                         help='id of gym environment')
-    parser.add_argument('--learning-rate', type=float, default=2.5e-4,
+    parser.add_argument('--learning_rate', type=float, default=2.5e-4,
                         help='optimizer learning rate')
     parser.add_argument('--seed', type=int, default=1,
                         help='experiment seed')
     parser.add_argument('--total_timesteps', type=int, default=25000,
                         help='total time steps of the experiment')
-    parser.add_argument('--torch-deterministic', type=str_to_bool, default=True, nargs='?', const=True,
+    parser.add_argument('--torch_deterministic', type=str_to_bool, default=True, nargs='?', const=True,
                         # `type` accepts any callable object i.e. any function that takes a single string 
                         # and returns a value. Ex. type=str returns str('value') and type=int returns int('value')
     # parser.add_argument('--torch-deterministic', type=lambda x:bool(strtobool(x)), default=True, nargs='?', const=True,
@@ -55,10 +70,17 @@ def parse_args():
                         help='if toggled or set to True, use CUDA (defaults to True)')
     parser.add_argument('--track', type=str_to_bool, default=False, nargs='?', const=True,
                         help='if toggled or set to True, this experiment will be tracked with Weights and Biases (defaults to False)')
-    parser.add_argument('--wandb-project-name', type=str, default='cleanrl',
+    parser.add_argument('--wandb_project_name', type=str, default='cleanrl',
                         help='Weights and Biases project name')
-    parser.add_argument('--wandb-entity', type=str, default=None,
+    parser.add_argument('--wandb_entity', type=str, default=None,
                         help='Weights and Biases entity (team), defaults to logged-in username')
+    parser.add_argument('--capture_video', type=str_to_bool, default=False, nargs='?', const=True,
+                        help='if toggled or set to True, saves videos of agent performance to `videos` directory (defaults to False)')
+    
+    # Algorithm-specific arguments
+    parser.add_argument('--num_envs', type=int, default=4,
+                        help='number of parallel environments in SyncVectorEnv')
+
     args = parser.parse_args()
     return args
 
@@ -94,23 +116,10 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")  #TODO: add "mps" option
 
-    # environment creating function
-    def make_env(gym_id):
-        def thunk():
-            env = gym.make(gym_id)  # initialize environment
-            env = gym.wrappers.RecordEpisodeStatistics(env) # records episode statistics (e.g. episodic return) in 'info'
-            env = gym.wrappers.RecordVideo(env, "videos", step_trigger=lambda t: t % 100 == 0) # record video of agent playing game (record video every 100 timesteps)
-            return env
-        return thunk
-    
-    # use SyncVectorEnv API to create vector environment from list of env-creating functions
-    envs = gym.vector.SyncVectorEnv([make_env(args.gym_id)]) 
-
-    observation = envs.reset()
-    for _ in range(200):
-        action = envs.action_space.sample()                     # sample an action
-        observation, reward, done, info = envs.step(action)     # records episode statistics (e.g. episodic return) in 'info'
-        for item in info:
-            if "episode" in item.keys():
-                print(f"episodic return {item['episode']['r']}")
-                # NOTE: there is no 'observation = env.reset()' anymore - vector environments will automatically reset
+    # env setup
+    envs = gym.vector.SyncVectorEnv(
+        [make_env(args.gym_id, args.seed + i, i, args.capture_video, run_name) for i in range(args.num_envs)]
+    ) # use SyncVectorEnv API to create vector environment from list of env-creating functions
+    assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space supported currently"
+    print("envs.single_observation_space.shape: ", envs.single_observation_space.shape)     # number of features in observation space
+    print("envs.single_action_space.n: ", envs.single_action_space.n)                       # number of discrete actions available
