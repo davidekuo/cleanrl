@@ -40,9 +40,29 @@ def make_env(gym_id, seed, idx, capture_video, run_name):
     return thunk
 
 
+def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
+    """ PPO Implementation Detail #2: orthogonal initialization of weights and constant initialization of biases """
+    torch.nn.init.orthogonal_(layer.weight, std)
+    torch.nn.init.constant_(layer.bias, bias_const)
+    return layer
+
 class Agent(nn.Module):
     def __init__(self, envs):
         super(Agent, self).__init__()
+        self.critic = nn.Sequential(
+            layer_init(nn.Linear(np.array(envs.single_observation_space.shape).prod(), 64)),
+            nn.Tanh(),
+            layer_init(nn.Linear(64, 64)),
+            nn.Tanh(),
+            layer_init(nn.Linear(64, 1), std=1.0), 
+        )
+        self.actor = nn.Sequential(
+            layer_init(nn.Linear(np.array(envs.single_observation_space.shape).prod(), 64)),
+            nn.Tanh(),
+            layer_init(nn.Linear(64, 64)),
+            nn.Tanh(),
+            layer_init(nn.Linear(64, envs.single_action_space.n), std=0.01),  # smaller std to ensure layer parameters have similar scalar values such that probability of taking each action will be similar
+        )
 
 
 def parse_args():
@@ -124,7 +144,7 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")  #TODO: add "mps" option
 
-    # env setup
+    """ PPO Implementation Detail #1: Vectorized Environment Architecture """
     envs = gym.vector.SyncVectorEnv(
         [make_env(args.gym_id, args.seed + i, i, args.capture_video, run_name) for i in range(args.num_envs)]
     ) # use SyncVectorEnv API to create vector environment from list of env-creating functions
@@ -132,3 +152,5 @@ if __name__ == "__main__":
     print("envs.single_observation_space.shape: ", envs.single_observation_space.shape)     # number of features in observation space
     print("envs.single_action_space.n: ", envs.single_action_space.n)                       # number of discrete actions available
 
+    agent = Agent(envs).to(device)
+    print(agent)
