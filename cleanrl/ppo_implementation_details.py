@@ -40,11 +40,12 @@ def make_env(gym_id, seed, idx, capture_video, run_name):
     return thunk
 
 
+""" PPO Implementation Detail #2: orthogonal initialization of weights and constant initialization of biases """
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
-    """ PPO Implementation Detail #2: orthogonal initialization of weights and constant initialization of biases """
     torch.nn.init.orthogonal_(layer.weight, std)
     torch.nn.init.constant_(layer.bias, bias_const)
     return layer
+
 
 class Agent(nn.Module):
     def __init__(self, envs):
@@ -112,6 +113,7 @@ def parse_args():
     args = parser.parse_args()
     return args
 
+
 if __name__ == "__main__":
     args = parse_args()
     print(args)
@@ -154,3 +156,8 @@ if __name__ == "__main__":
 
     agent = Agent(envs).to(device)
     print(agent)
+
+    """ PPO Implementation Details #3: Adam Optimizer Epsilon Parameter 1e-5 """
+    optimizer = torch.optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
+
+    
