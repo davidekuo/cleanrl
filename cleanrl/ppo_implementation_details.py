@@ -9,6 +9,9 @@ import gym
 import gym.spaces
 import numpy as np
 import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -35,6 +38,11 @@ def make_env(gym_id, seed, idx, capture_video, run_name):
         env.observation_space.seed(seed)
         return env
     return thunk
+
+
+class Agent(nn.Module):
+    def __init__(self, envs):
+        super(Agent, self).__init__()
 
 
 def parse_args():
@@ -123,3 +131,4 @@ if __name__ == "__main__":
     assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space supported currently"
     print("envs.single_observation_space.shape: ", envs.single_observation_space.shape)     # number of features in observation space
     print("envs.single_action_space.n: ", envs.single_action_space.n)                       # number of discrete actions available
+
