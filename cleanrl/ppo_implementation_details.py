@@ -64,6 +64,16 @@ class Agent(nn.Module):
             nn.Tanh(),
             layer_init(nn.Linear(64, envs.single_action_space.n), std=0.01),  # smaller std to ensure layer parameters have similar scalar values such that probability of taking each action will be similar
         )
+    
+    def get_value(self, x): 
+        return self.critic(x)
+    
+    def get_action_and_value(self, x, action=None):
+        logits = self.actor(x)  # unnormalized action probabilities
+        probs = Categorical(logits=logits)  # essentially softmax to get normalized action probabilities (action probability distribution)
+        if action is None:  # i.e. we are in rollout phase 
+            action = probs.sample()
+        return action, probs.log_prob(action), probs.entropy(), self.critic(x)
 
 
 def parse_args():
@@ -109,8 +119,12 @@ def parse_args():
     # Algorithm-specific arguments
     parser.add_argument('--num_envs', type=int, default=4,
                         help='number of parallel environments in SyncVectorEnv')
-
+    parser.add_argument('--num_steps', type=int, default=128,
+                        help='number of steps to run in each environment per policy rollout')
+    
     args = parser.parse_args()
+    args.batch_size = int(args.num_envs * args.num_steps)  # batch size = num_envs * num_steps = 4 * 128 = 512
+
     return args
 
 
@@ -160,4 +174,23 @@ if __name__ == "__main__":
     """ PPO Implementation Details #3: Adam Optimizer Epsilon Parameter 1e-5 """
     optimizer = torch.optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
-    
+    # Storage variable setup
+    obs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space.shape).to(device)  # results in tensor of shape (args.num_steps, args.num_envs, [unpacked dimensions of single observation space])
+    actions = torch.zeros((args.num_steps, args.num_envs) + envs.single_action_space.shape).to(device)
+    logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
+    rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
+    dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
+    values = torch.zeros((args.num_steps, args.num_envs)).to(device)
+
+    # TRY NOT TO MODIFY: start the game
+    global_step = 0                                         # track number of environment steps
+    start_time = time.time()                                # for calculating frames per second
+    next_obs = torch.Tensor(envs.reset()).to(device)        # store initial observation
+    next_done = torch.zeros(args.num_envs).to(device)       # store initial termination status to be false
+    num_updates = args.total_timesteps // args.batch_size   # number of iterations/updates required to complete specified training run ... 25000/512=48
+    print(num_updates)
+    print("next_obs.shape: ", next_obs.shape)                                   # [num_envs, (unpacked observation_space_shape)]
+    print("agent.get_value(next_obs): ", agent.get_value(next_obs))             # 1 scalar value for each environment
+    print("agent.get_value(next_obs.shape: ", agent.get_value(next_obs).shape)  # (num_envs, 1)
+    print()
+    print("agent.get_action_and_value(next_obs)", agent.get_action_and_value(next_obs))
