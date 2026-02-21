@@ -165,11 +165,8 @@ if __name__ == "__main__":
         [make_env(args.gym_id, args.seed + i, i, args.capture_video, run_name) for i in range(args.num_envs)]
     ) # use SyncVectorEnv API to create vector environment from list of env-creating functions
     assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space supported currently"
-    print("envs.single_observation_space.shape: ", envs.single_observation_space.shape)     # number of features in observation space
-    print("envs.single_action_space.n: ", envs.single_action_space.n)                       # number of discrete actions available
 
     agent = Agent(envs).to(device)
-    print(agent)
 
     """ PPO Implementation Details #3: Adam Optimizer Epsilon Parameter 1e-5 """
     optimizer = torch.optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
@@ -188,9 +185,7 @@ if __name__ == "__main__":
     next_obs = torch.Tensor(envs.reset()).to(device)        # store initial observation
     next_done = torch.zeros(args.num_envs).to(device)       # store initial termination status to be false
     num_updates = args.total_timesteps // args.batch_size   # number of iterations/updates required to complete specified training run ... 25000/512=48
-    print(num_updates)
-    print("next_obs.shape: ", next_obs.shape)                                   # [num_envs, (unpacked observation_space_shape)]
-    print("agent.get_value(next_obs): ", agent.get_value(next_obs))             # 1 scalar value for each environment
-    print("agent.get_value(next_obs.shape: ", agent.get_value(next_obs).shape)  # (num_envs, 1)
-    print()
-    print("agent.get_action_and_value(next_obs)", agent.get_action_and_value(next_obs))
+
+    # Training loop
+    for update in range(1, num_updates + 1):
+        pass
